@@ -15,11 +15,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/containerd/containerd/diff"
 	"github.com/containerd/containerd/pkg/seed" //nolint:staticcheck // SA1019 deprecated
 	"github.com/containerd/containerd/pkg/userns"
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/remotes/docker"
 	"github.com/containerd/containerd/sys"
+	"github.com/containerd/typeurl/v2"
 	sddaemon "github.com/coreos/go-systemd/v22/daemon"
 	"github.com/dagger/dagger/engine/cache"
 	"github.com/dagger/dagger/internal/engine"
@@ -92,6 +94,16 @@ func init() {
 
 	// enable in memory recording for buildkitd traces
 	detect.Recorder = detect.NewTraceRecorder()
+
+	// TODO:(sipsma) upstream this if it works
+	diff.RegisterProcessor(func(ctx context.Context, mediaType string) (diff.StreamProcessorInit, bool) {
+		if mediaType != "application/vnd.docker.image.rootfs.diff.tar.zstd" {
+			return nil, false
+		}
+		return func(ctx context.Context, stream diff.StreamProcessor, payloads map[string]typeurl.Any) (diff.StreamProcessor, error) {
+			return diff.NewProcessorChain(ocispecs.MediaTypeImageLayer+"+zstd", stream), nil
+		}, true
+	})
 }
 
 var propagators = propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{})
